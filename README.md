@@ -1,4 +1,4 @@
-# Exercise Volume Builder 
+# Exercise Volume Builder
 
 Companion app to FoodIQ. Build a weekly training plan and see live whether
 each muscle group's weekly set volume hits your MED range.
