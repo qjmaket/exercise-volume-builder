@@ -74,7 +74,7 @@ export default function VolumeBuilder({
   const days = Array.from({ length: daysPerWeek }, (_, i) => i);
 
   const filteredExercises = exercises.filter((ex) => {
-    if (muscleFilter !== "all" && ex.primary_muscle !== muscleFilter) return false;
+    if (muscleFilter !== "all" && (ex.primary_muscle || "").toLowerCase() !== muscleFilter) return false;
     if (typeFilter !== "all" && ex.type !== typeFilter) return false;
     if (search && !ex.name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
@@ -87,9 +87,16 @@ export default function VolumeBuilder({
         const ex = EX_BY_ID[entry.exercise_id];
         if (!ex) return;
         const bucket = ex.type === "plyometric" ? "plyo" : "resistance";
-        t[ex.primary_muscle][bucket] += entry.sets;
-        if (ex.secondary_muscle) {
-          t[ex.secondary_muscle][bucket] += entry.sets * 0.5;
+        // Normalize casing defensively — muscle values may arrive as "Back",
+        // "back", or otherwise depending on data source (manual entry vs
+        // AI-enriched submissions), so match against the lowercase tally keys.
+        const primaryKey = (ex.primary_muscle || "").toLowerCase();
+        const secondaryKey = (ex.secondary_muscle || "").toLowerCase();
+        if (t[primaryKey]) {
+          t[primaryKey][bucket] += entry.sets;
+        }
+        if (secondaryKey && t[secondaryKey]) {
+          t[secondaryKey][bucket] += entry.sets * 0.5;
         }
       });
     });
@@ -277,8 +284,8 @@ export default function VolumeBuilder({
                 <div>
                   <div>{ex.name}</div>
                   <div style={{ fontSize: 11, color: C.textDim }}>
-                    {MUSCLES.find((m) => m.key === ex.primary_muscle)?.label}
-                    {ex.secondary_muscle && ` · +${MUSCLES.find((m) => m.key === ex.secondary_muscle)?.label}`}
+                    {MUSCLES.find((m) => m.key === (ex.primary_muscle || "").toLowerCase())?.label}
+                    {ex.secondary_muscle && ` · +${MUSCLES.find((m) => m.key === (ex.secondary_muscle || "").toLowerCase())?.label}`}
                     {ex.type === "plyometric" ? " · Plyo" : ""}
                   </div>
                 </div>
