@@ -152,6 +152,29 @@ function Loaded({ userId }) {
     if (error) setError(error.message);
   }, []);
 
+  const handleReorderEntries = useCallback(async (dayIndex, orderedEntryIds) => {
+    // Optimistic local reorder so the UI updates immediately.
+    setPlan((prev) => {
+      const entries = prev[dayIndex] || [];
+      const byId = Object.fromEntries(entries.map((e) => [e.id, e]));
+      const reordered = orderedEntryIds
+        .map((id, i) => (byId[id] ? { ...byId[id], order_index: i } : null))
+        .filter(Boolean);
+      return { ...prev, [dayIndex]: reordered };
+    });
+
+    // Persist each entry's new order_index. Individual updates rather than
+    // a single bulk call since Supabase's client doesn't support a
+    // multi-row "update different values per row" in one request.
+    const results = await Promise.all(
+      orderedEntryIds.map((id, i) =>
+        supabase.from("plan_entries").update({ order_index: i }).eq("id", id)
+      )
+    );
+    const failed = results.find((r) => r.error);
+    if (failed) setError(failed.error.message);
+  }, []);
+
   const handleRequestExercise = useCallback(
     async (payload) => {
       const { error } = await supabase
@@ -202,6 +225,7 @@ function Loaded({ userId }) {
         onAddExercise={handleAddExercise}
         onUpdateEntry={handleUpdateEntry}
         onRemoveEntry={handleRemoveEntry}
+        onReorderEntries={handleReorderEntries}
         onRequestExercise={handleRequestExercise}
       />
     </>

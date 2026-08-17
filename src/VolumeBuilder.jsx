@@ -42,6 +42,7 @@ const GOALS = {
  *  - onAddExercise(dayIndex, exercise)
  *  - onUpdateEntry(entryId, field, value)
  *  - onRemoveEntry(entryId)
+ *  - onReorderEntries(dayIndex, orderedEntryIds) -> parent persists order_index
  *  - onRequestExercise({ exercise_name, notes, suggested_muscle }) -> writes to exercise_submissions
  */
 export default function VolumeBuilder({
@@ -54,6 +55,7 @@ export default function VolumeBuilder({
   onAddExercise,
   onUpdateEntry,
   onRemoveEntry,
+  onReorderEntries,
   onRequestExercise,
 }) {
   const [activeDay, setActiveDay] = useState(0);
@@ -64,6 +66,9 @@ export default function VolumeBuilder({
   const [reqName, setReqName] = useState("");
   const [reqNotes, setReqNotes] = useState("");
   const [reqMuscle, setReqMuscle] = useState("");
+  const [showSummary, setShowSummary] = useState(false);
+  const [draggedEntryId, setDraggedEntryId] = useState(null);
+  const [copyStatus, setCopyStatus] = useState("");
 
   const EX_BY_ID = useMemo(
     () => Object.fromEntries(exercises.map((e) => [e.id, e])),
@@ -110,6 +115,75 @@ export default function VolumeBuilder({
     return { label: "In range", color: C.teal };
   };
 
+  const sortedEntries = (dayIndex) =>
+    (plan[dayIndex] || [])
+      .slice()
+      .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+
+  const handleDrop = (dayIndex, targetEntryId) => {
+    if (!draggedEntryId || draggedEntryId === targetEntryId) {
+      setDraggedEntryId(null);
+      return;
+    }
+    const ordered = sortedEntries(dayIndex).map((e) => e.id);
+    const from = ordered.indexOf(draggedEntryId);
+    const to = ordered.indexOf(targetEntryId);
+    if (from === -1 || to === -1) {
+      setDraggedEntryId(null);
+      return;
+    }
+    ordered.splice(to, 0, ordered.splice(from, 1)[0]);
+    setDraggedEntryId(null);
+    // Parent is responsible for persisting the new order_index values
+    // (e.g. bulk-updating plan_entries.order_index) since this component
+    // doesn't own the data source.
+    if (onReorderEntries) onReorderEntries(dayIndex, ordered);
+  };
+
+  const buildSummaryText = () => {
+    const lines = [`Weekly Workout Plan — ${goal.label}`, ""];
+    days.forEach((d) => {
+      const entries = sortedEntries(d);
+      lines.push(`Day ${d + 1}`);
+      if (entries.length === 0) {
+        lines.push("  (no exercises added)");
+      } else {
+        entries.forEach((entry) => {
+          const ex = EX_BY_ID[entry.exercise_id];
+          if (!ex) return;
+          const weightStr = entry.weight ? ` @ ${entry.weight} lbs` : "";
+          lines.push(`  • ${ex.name} — ${entry.sets} x ${entry.reps}${weightStr}`);
+        });
+      }
+      lines.push("");
+    });
+    lines.push("Weekly muscle volume:");
+    MUSCLES.forEach((m) => {
+      const data = tally[m.key];
+      const total = data.resistance + data.plyo;
+      if (total > 0) {
+        lines.push(`  ${m.label}: ${total.toFixed(1)} sets`);
+      }
+    });
+    return lines.join("\n");
+  };
+
+  const copySummary = async () => {
+    try {
+      await navigator.clipboard.writeText(buildSummaryText());
+      setCopyStatus("Copied!");
+      setTimeout(() => setCopyStatus(""), 2000);
+    } catch {
+      setCopyStatus("Copy failed — select text manually");
+      setTimeout(() => setCopyStatus(""), 3000);
+    }
+  };
+
+  const emailSummary = () => {
+    const body = encodeURIComponent(buildSummaryText());
+    window.location.href = `mailto:?subject=${encodeURIComponent("Weekly Workout Plan")}&body=${body}`;
+  };
+
   const submitRequest = (e) => {
     e.preventDefault();
     if (!reqName.trim()) return;
@@ -151,6 +225,17 @@ export default function VolumeBuilder({
           .vb-controls-row { gap: 12px; }
           .vb-controls-row > div { flex: 1 1 100%; }
           .vb-target { margin-left: 0 !important; }
+        }
+        @media print {
+          body * { visibility: hidden; }
+          .vb-print-area, .vb-print-area * { visibility: visible; }
+          .vb-print-area {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            color: #000;
+          }
         }
       `}</style>
       <div style={s.header}>
@@ -195,7 +280,12 @@ export default function VolumeBuilder({
 
       {/* PLAN — full-width banner */}
       <div style={{ ...s.panel, marginBottom: 16 }}>
-        <div style={s.panelTitle}>Weekly plan</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ ...s.panelTitle, marginBottom: 0 }}>Weekly plan</div>
+          <button style={s.summaryBtn} onClick={() => setShowSummary(true)}>
+            View & export
+          </button>
+        </div>
         <div style={s.dayTabs}>
           {days.map((d) => (
             <div key={d} style={s.dayTab(d === activeDay)} onClick={() => setActiveDay(d)}>
@@ -208,13 +298,28 @@ export default function VolumeBuilder({
             No exercises added to Day {activeDay + 1} yet. Add some from the library below.
           </div>
         )}
-        {(plan[activeDay] || []).map((entry) => {
+        {sortedEntries(activeDay).map((entry) => {
           const ex = EX_BY_ID[entry.exercise_id];
           if (!ex) return null;
           return (
-            <div key={entry.id} style={s.planEntry}>
+            <div
+              key={entry.id}
+              style={{
+                ...s.planEntry,
+                opacity: draggedEntryId === entry.id ? 0.5 : 1,
+                cursor: "grab",
+              }}
+              draggable
+              onDragStart={() => setDraggedEntryId(entry.id)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => handleDrop(activeDay, entry.id)}
+              onDragEnd={() => setDraggedEntryId(null)}
+            >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{ex.name}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ color: C.textDim, fontSize: 12 }}>⠿</span>
+                  {ex.name}
+                </div>
                 <button style={s.removeBtn} onClick={() => onRemoveEntry(entry.id)}>✕</button>
               </div>
               <div style={{ display: "flex", gap: 14, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
@@ -363,6 +468,26 @@ export default function VolumeBuilder({
           })}
         </div>
       </div>
+
+      {showSummary && (
+        <div style={s.modalOverlay} onClick={() => setShowSummary(false)}>
+          <div style={s.modalPanel} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div style={s.panelTitle}>Weekly summary</div>
+              <button style={s.removeBtn} onClick={() => setShowSummary(false)}>✕</button>
+            </div>
+            <div className="vb-print-area" style={s.summaryText}>
+              {buildSummaryText()}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+              <button style={s.addBtn} onClick={copySummary}>Copy to clipboard</button>
+              <button style={s.addBtn} onClick={() => window.print()}>Print</button>
+              <button style={s.addBtn} onClick={emailSummary}>Email</button>
+              {copyStatus && <span style={{ fontSize: 12, color: C.teal, alignSelf: "center" }}>{copyStatus}</span>}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -471,4 +596,44 @@ const styles = {
   removeBtn: { background: "transparent", border: "none", color: C.red, cursor: "pointer", fontSize: 14 },
   muscleRow: { marginBottom: 14 },
   barTrack: { background: C.bg, borderRadius: 6, height: 8, overflow: "hidden", marginTop: 4, border: `1px solid ${C.border}` },
+  summaryBtn: {
+    background: "transparent",
+    color: C.teal,
+    border: `1px solid ${C.teal}`,
+    borderRadius: 6,
+    padding: "5px 12px",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.6)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+    zIndex: 1000,
+  },
+  modalPanel: {
+    background: C.panel,
+    border: `1px solid ${C.border}`,
+    borderRadius: 12,
+    padding: 20,
+    maxWidth: 520,
+    width: "100%",
+    maxHeight: "80vh",
+    overflowY: "auto",
+  },
+  summaryText: {
+    whiteSpace: "pre-wrap",
+    fontSize: 13,
+    fontFamily: "'Space Grotesk', monospace",
+    lineHeight: 1.6,
+    background: C.panelAlt,
+    border: `1px solid ${C.border}`,
+    borderRadius: 8,
+    padding: 12,
+  },
 };
