@@ -119,6 +119,16 @@ export default function VolumeBuilder({
     return Math.round(raw / 5) * 5;
   };
 
+  // Deload week target: 50-60% of estimated 1RM, each bound rounded to the
+  // nearest 5 lbs independently (matching the 1RM rounding convention) so
+  // both ends of the range are actually loadable weights.
+  const deloadRange = (oneRepMax) => {
+    if (oneRepMax == null) return null;
+    const low = Math.round((oneRepMax * 0.5) / 5) * 5;
+    const high = Math.round((oneRepMax * 0.6) / 5) * 5;
+    return [low, high];
+  };
+
   const statusFor = (total, min, max) => {
     if (total === 0) return { label: "No work", color: C.textDim };
     if (total < min) return { label: "Under MED", color: C.yellow };
@@ -366,9 +376,14 @@ export default function VolumeBuilder({
                   />
                 </label>
                 {estimateOneRepMax(entry.weight, entry.reps) != null && (
-                  <span style={{ fontSize: 11, color: C.teal, fontWeight: 600 }}>
-                    Est. 1RM: {estimateOneRepMax(entry.weight, entry.reps)} lbs
-                  </span>
+                  <>
+                    <span style={{ fontSize: 11, color: C.teal, fontWeight: 600 }}>
+                      Est. 1RM: {estimateOneRepMax(entry.weight, entry.reps)} lbs
+                    </span>
+                    <span style={{ fontSize: 11, color: C.yellow, fontWeight: 600 }}>
+                      Deload: {deloadRange(estimateOneRepMax(entry.weight, entry.reps))[0]}–{deloadRange(estimateOneRepMax(entry.weight, entry.reps))[1]} lbs
+                    </span>
+                  </>
                 )}
               </div>
             </div>
