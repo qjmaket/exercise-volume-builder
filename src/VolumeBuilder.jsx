@@ -534,67 +534,73 @@ export default function VolumeBuilder({
 }
 
 // Floating-bar comparison of sets and rep ranges across all training goals.
-// Built with plain inline SVG rather than a chart library — no chart
-// dependency exists in this project yet, and one bar chart doesn't justify
-// adding one (MED: avoid feature/dependency bloat for a single use).
+// Built with HTML/CSS flex bars, not SVG viewBox — SVG viewBox scales text
+// and bars together as one unit, so it either overflowed the panel on wide
+// desktop screens or shrank text unreadably on narrow phone screens. Flex
+// bars scale only the bar width with the container; label/value font sizes
+// stay fixed px at every screen size.
 function GoalRangeChart({ goals, activeGoalKey }) {
   const entries = Object.entries(goals);
-  const rowHeight = 46;
-  const chartHeight = entries.length * rowHeight + 30;
-  const chartWidth = 600;
-  const labelWidth = 160;
-  const axisWidth = chartWidth - labelWidth - 20;
   const setsMax = Math.max(...entries.map(([, g]) => g.max)) || 1;
   const repsMax = Math.max(...entries.map(([, g]) => g.repMax)) || 1;
   const scaleMax = Math.max(setsMax, repsMax);
 
-  const xFor = (val) => labelWidth + (val / scaleMax) * axisWidth;
-
   return (
-    <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} width="100%" style={{ display: "block" }}>
-      {entries.map(([key, g], i) => {
-        const y = 20 + i * rowHeight;
+    <div>
+      {entries.map(([key, g]) => {
         const isActive = key === activeGoalKey;
-        const dim = isActive ? 1 : 0.45;
         return (
-          <g key={key}>
-            <text
-              x={0}
-              y={y + 10}
-              fill={isActive ? C.text : C.textDim}
-              fontSize="12"
-              fontWeight={isActive ? 700 : 400}
-              fontFamily="'Space Grotesk', sans-serif"
+          <div key={key} style={{ marginBottom: 16, opacity: isActive ? 1 : 0.5 }}>
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: isActive ? 700 : 600,
+                color: isActive ? C.text : C.textDim,
+                marginBottom: 6,
+              }}
             >
               {g.label}
-            </text>
-            {/* Sets range bar */}
-            <line
-              x1={xFor(g.min)} x2={xFor(g.max)} y1={y} y2={y}
-              stroke={C.teal} strokeOpacity={dim} strokeWidth={8} strokeLinecap="round"
-            />
-            <text x={xFor(g.max) + 8} y={y + 4} fill={C.teal} fillOpacity={dim} fontSize="11">
-              {g.min}–{g.max} sets
-            </text>
-            {/* Reps range bar */}
-            <line
-              x1={xFor(g.repMin)} x2={xFor(g.repMax)} y1={y + 16} y2={y + 16}
-              stroke={C.yellow} strokeOpacity={dim} strokeWidth={8} strokeLinecap="round"
-            />
-            <text x={xFor(g.repMax) + 8} y={y + 20} fill={C.yellow} fillOpacity={dim} fontSize="11">
-              {g.repMin}–{g.repMax} reps
-            </text>
-          </g>
+            </div>
+            <RangeBar min={g.min} max={g.max} scaleMax={scaleMax} color={C.teal} unit="sets" />
+            <RangeBar min={g.repMin} max={g.repMax} scaleMax={scaleMax} color={C.yellow} unit="reps" />
+          </div>
         );
       })}
-      {/* Legend */}
-      <g>
-        <line x1={labelWidth} x2={labelWidth + 20} y1={chartHeight - 8} y2={chartHeight - 8} stroke={C.teal} strokeWidth={6} strokeLinecap="round" />
-        <text x={labelWidth + 26} y={chartHeight - 4} fill={C.textDim} fontSize="10">Sets</text>
-        <line x1={labelWidth + 70} x2={labelWidth + 90} y1={chartHeight - 8} y2={chartHeight - 8} stroke={C.yellow} strokeWidth={6} strokeLinecap="round" />
-        <text x={labelWidth + 96} y={chartHeight - 4} fill={C.textDim} fontSize="10">Reps</text>
-      </g>
-    </svg>
+      <div style={{ display: "flex", gap: 16, marginTop: 4, fontSize: 11, color: C.textDim }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 16, height: 6, borderRadius: 3, background: C.teal, display: "inline-block" }} />
+          Sets
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 16, height: 6, borderRadius: 3, background: C.yellow, display: "inline-block" }} />
+          Reps
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function RangeBar({ min, max, scaleMax, color, unit }) {
+  const leftPct = (min / scaleMax) * 100;
+  const widthPct = ((max - min) / scaleMax) * 100;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+      <div style={{ flex: 1, position: "relative", height: 8, minWidth: 0 }}>
+        <div
+          style={{
+            position: "absolute",
+            left: `${leftPct}%`,
+            width: `${widthPct}%`,
+            height: 8,
+            borderRadius: 4,
+            background: color,
+          }}
+        />
+      </div>
+      <span style={{ fontSize: 11, color, fontWeight: 600, minWidth: 66, textAlign: "right", flexShrink: 0 }}>
+        {min}–{max} {unit}
+      </span>
+    </div>
   );
 }
 
