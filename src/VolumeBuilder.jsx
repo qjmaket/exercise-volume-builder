@@ -132,6 +132,20 @@ export default function VolumeBuilder({
     return [low, high];
   };
 
+  // Per-exercise MED contribution: primary muscle gets full sets, secondary
+  // gets half sets — mirrors the exact weighting used in the muscle volume
+  // tally above, so this label and the tally total always agree.
+  const medContribution = (ex, sets) => {
+    const primaryLabel = MUSCLES.find((m) => m.key === (ex.primary_muscle || "").toLowerCase())?.label;
+    if (!primaryLabel) return null;
+    const secondaryLabel = ex.secondary_muscle
+      ? MUSCLES.find((m) => m.key === (ex.secondary_muscle || "").toLowerCase())?.label
+      : null;
+    const parts = [`${primaryLabel} +${sets}`];
+    if (secondaryLabel) parts.push(`${secondaryLabel} +${(sets * 0.5).toFixed(1)}`);
+    return parts.join(", ");
+  };
+
   const statusFor = (total, min, max) => {
     if (total === 0) return { label: "No work", color: C.textDim };
     if (total < min) return { label: "Under MED", color: C.yellow };
@@ -353,6 +367,11 @@ export default function VolumeBuilder({
                 </div>
                 <button style={s.removeBtn} onClick={() => onRemoveEntry(entry.id)}>✕</button>
               </div>
+              <div style={{ fontSize: 11, color: C.textDim, marginTop: 2, marginLeft: 18 }}>
+                {MUSCLES.find((m) => m.key === (ex.primary_muscle || "").toLowerCase())?.label}
+                {ex.secondary_muscle && ` · +${MUSCLES.find((m) => m.key === (ex.secondary_muscle || "").toLowerCase())?.label}`}
+                {ex.type === "plyometric" ? " · Plyo" : ""}
+              </div>
               <div style={{ display: "flex", gap: 14, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
                 <label style={{ fontSize: 11, color: C.textDim }}>
                   Sets{" "}
@@ -396,6 +415,11 @@ export default function VolumeBuilder({
                   </>
                 )}
               </div>
+              {medContribution(ex, entry.sets) && (
+                <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>
+                  MED: {medContribution(ex, entry.sets)}
+                </div>
+              )}
             </div>
           );
         })}
