@@ -108,6 +108,17 @@ export default function VolumeBuilder({
     return t;
   }, [plan, EX_BY_ID]);
 
+  // Epley formula: 1RM = weight * (1 + reps/30). Rounded to the nearest 5 lbs
+  // since that's what's actually loadable on a bar — raw decimal output isn't
+  // actionable. Only estimates in the 1-10 rep range are reasonably accurate;
+  // above that the formula overstates true 1RM, so it's suppressed past 12 reps
+  // rather than shown as a misleadingly precise number.
+  const estimateOneRepMax = (weight, reps) => {
+    if (!weight || !reps || reps < 1 || reps > 12) return null;
+    const raw = weight * (1 + reps / 30);
+    return Math.round(raw / 5) * 5;
+  };
+
   const statusFor = (total, min, max) => {
     if (total === 0) return { label: "No work", color: C.textDim };
     if (total < min) return { label: "Under MED", color: C.yellow };
@@ -354,6 +365,11 @@ export default function VolumeBuilder({
                     }
                   />
                 </label>
+                {estimateOneRepMax(entry.weight, entry.reps) != null && (
+                  <span style={{ fontSize: 11, color: C.teal, fontWeight: 600 }}>
+                    Est. 1RM: {estimateOneRepMax(entry.weight, entry.reps)} lbs
+                  </span>
+                )}
               </div>
             </div>
           );
