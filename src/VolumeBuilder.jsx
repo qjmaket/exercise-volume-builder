@@ -25,12 +25,15 @@ const MUSCLES = [
   { key: "core", label: "Core" },
 ];
 
+// repMin/repMax are standard strength-training rep-range conventions per goal
+// (widely used, e.g. NASM OPT phases) — individual programs vary at the
+// margins, so treat these as sensible defaults rather than fixed law.
 const GOALS = {
-  hypertrophy: { label: "Hypertrophy (Size)", min: 10, max: 20, plyoMin: 0, plyoMax: 4 },
-  strength: { label: "Strength", min: 8, max: 15, plyoMin: 0, plyoMax: 4 },
-  powerlifting: { label: "Powerlifting", min: 6, max: 12, plyoMin: 0, plyoMax: 2 },
-  endurance: { label: "Muscular Endurance", min: 15, max: 25, plyoMin: 0, plyoMax: 4 },
-  athleticism: { label: "Athleticism / Sport (Power & Speed)", min: 10, max: 16, plyoMin: 3, plyoMax: 6 },
+  hypertrophy: { label: "Hypertrophy (Size)", min: 10, max: 20, plyoMin: 0, plyoMax: 4, repMin: 8, repMax: 12 },
+  strength: { label: "Strength", min: 8, max: 15, plyoMin: 0, plyoMax: 4, repMin: 6, repMax: 8 },
+  powerlifting: { label: "Powerlifting", min: 6, max: 12, plyoMin: 0, plyoMax: 2, repMin: 1, repMax: 5 },
+  endurance: { label: "Muscular Endurance", min: 15, max: 25, plyoMin: 0, plyoMax: 4, repMin: 13, repMax: 20 },
+  athleticism: { label: "Athleticism / Sport (Power & Speed)", min: 10, max: 16, plyoMin: 3, plyoMax: 6, repMin: 3, repMax: 6 },
 };
 
 /**
@@ -296,7 +299,14 @@ export default function VolumeBuilder({
           {goal.plyoMax > 0 && (
             <> · Plyo: <span style={{ color: C.teal, fontWeight: 700 }}>{goal.plyoMin}–{goal.plyoMax} sets</span></>
           )}
+          {" "}· Reps: <span style={{ color: C.teal, fontWeight: 700 }}>{goal.repMin}–{goal.repMax}</span> / set
         </div>
+      </div>
+
+      {/* GOAL COMPARISON CHART */}
+      <div style={{ ...s.panel, marginBottom: 16 }}>
+        <div style={s.panelTitle}>Sets & reps by training goal</div>
+        <GoalRangeChart goals={GOALS} activeGoalKey={goalKey} />
       </div>
 
       {/* PLAN — full-width banner */}
@@ -520,6 +530,71 @@ export default function VolumeBuilder({
         </div>
       )}
     </div>
+  );
+}
+
+// Floating-bar comparison of sets and rep ranges across all training goals.
+// Built with plain inline SVG rather than a chart library — no chart
+// dependency exists in this project yet, and one bar chart doesn't justify
+// adding one (MED: avoid feature/dependency bloat for a single use).
+function GoalRangeChart({ goals, activeGoalKey }) {
+  const entries = Object.entries(goals);
+  const rowHeight = 46;
+  const chartHeight = entries.length * rowHeight + 30;
+  const chartWidth = 600;
+  const labelWidth = 160;
+  const axisWidth = chartWidth - labelWidth - 20;
+  const setsMax = Math.max(...entries.map(([, g]) => g.max)) || 1;
+  const repsMax = Math.max(...entries.map(([, g]) => g.repMax)) || 1;
+  const scaleMax = Math.max(setsMax, repsMax);
+
+  const xFor = (val) => labelWidth + (val / scaleMax) * axisWidth;
+
+  return (
+    <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} width="100%" style={{ display: "block" }}>
+      {entries.map(([key, g], i) => {
+        const y = 20 + i * rowHeight;
+        const isActive = key === activeGoalKey;
+        const dim = isActive ? 1 : 0.45;
+        return (
+          <g key={key}>
+            <text
+              x={0}
+              y={y + 10}
+              fill={isActive ? C.text : C.textDim}
+              fontSize="12"
+              fontWeight={isActive ? 700 : 400}
+              fontFamily="'Space Grotesk', sans-serif"
+            >
+              {g.label}
+            </text>
+            {/* Sets range bar */}
+            <line
+              x1={xFor(g.min)} x2={xFor(g.max)} y1={y} y2={y}
+              stroke={C.teal} strokeOpacity={dim} strokeWidth={8} strokeLinecap="round"
+            />
+            <text x={xFor(g.max) + 8} y={y + 4} fill={C.teal} fillOpacity={dim} fontSize="11">
+              {g.min}–{g.max} sets
+            </text>
+            {/* Reps range bar */}
+            <line
+              x1={xFor(g.repMin)} x2={xFor(g.repMax)} y1={y + 16} y2={y + 16}
+              stroke={C.yellow} strokeOpacity={dim} strokeWidth={8} strokeLinecap="round"
+            />
+            <text x={xFor(g.repMax) + 8} y={y + 20} fill={C.yellow} fillOpacity={dim} fontSize="11">
+              {g.repMin}–{g.repMax} reps
+            </text>
+          </g>
+        );
+      })}
+      {/* Legend */}
+      <g>
+        <line x1={labelWidth} x2={labelWidth + 20} y1={chartHeight - 8} y2={chartHeight - 8} stroke={C.teal} strokeWidth={6} strokeLinecap="round" />
+        <text x={labelWidth + 26} y={chartHeight - 4} fill={C.textDim} fontSize="10">Sets</text>
+        <line x1={labelWidth + 70} x2={labelWidth + 90} y1={chartHeight - 8} y2={chartHeight - 8} stroke={C.yellow} strokeWidth={6} strokeLinecap="round" />
+        <text x={labelWidth + 96} y={chartHeight - 4} fill={C.textDim} fontSize="10">Reps</text>
+      </g>
+    </svg>
   );
 }
 
